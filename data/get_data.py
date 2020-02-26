@@ -87,7 +87,8 @@ def mongo_import(month, fp):
 
     db_name = 'reddit'
     collection_name = 'comments-{}'.format(month)
-    cmd = ['mongoimport', '-d', db_name, '-c', collection_name, '--file', fp]
+    #cmd = ['mongoimport', '-d', db_name, '-c', collection_name, '--file', fp]
+    cmd = ['mongoimport', '-d', db_name, '-c', collection_name, '--file', fp, '--numInsertionWorkers', '8']
     print('Loading to mongodb...')
     subprocess.run(cmd, check=True, text=True)
 
@@ -198,4 +199,4 @@ if __name__ == "__main__":
 
     links_df = get_download_links()
 
-    main(reddit, links_df=links_df, df_slice=slice(51, 75))
+    main(reddit, links_df=links_df, df_slice=slice(76, 100))
