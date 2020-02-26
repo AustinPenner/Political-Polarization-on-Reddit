@@ -58,12 +58,14 @@ def extract_file(fp, remove_file):
     """Extracts the contents of a download file"""
 
     print('Extracting file...')
-    fileout = fp[:fp.rfind('.')] + '.json'
+    fileout = fp[:fp.rfind('.')]
     extension = fp[fp.rfind('.'):]
 
     if extension == '.bz2':
-        with bz2.BZ2File(fp) as fr, open(fileout, 'wb') as fw:
-            shutil.copyfileobj(fr,fw)
+        #with bz2.BZ2File(fp) as fr, open(fileout, 'wb') as fw:
+        #    shutil.copyfileobj(fr,fw)
+        cmd = ['bzip2', '-d', fp]
+        subprocess.run(cmd, check=True, text=True)
 #     elif extension == '.xz':
 #         pass
     else:
@@ -87,7 +89,6 @@ def mongo_import(month, fp):
 
     db_name = 'reddit'
     collection_name = 'comments-{}'.format(month)
-    #cmd = ['mongoimport', '-d', db_name, '-c', collection_name, '--file', fp]
     cmd = ['mongoimport', '-d', db_name, '-c', collection_name, '--file', fp, '--numInsertionWorkers', '8']
     print('Loading to mongodb...')
     subprocess.run(cmd, check=True, text=True)
@@ -199,4 +200,4 @@ if __name__ == "__main__":
 
     links_df = get_download_links()
 
-    main(reddit, links_df=links_df, df_slice=slice(89, 144))
+    main(reddit, links_df=links_df, df_slice=slice(116, 144))
