@@ -199,4 +199,4 @@ if __name__ == "__main__":
 
     links_df = get_download_links()
 
-    main(reddit, links_df=links_df, df_slice=slice(76, 100))
+    main(reddit, links_df=links_df, df_slice=slice(89, 144))
