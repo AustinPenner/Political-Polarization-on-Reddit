@@ -62,12 +62,11 @@ def extract_file(fp, remove_file):
     extension = fp[fp.rfind('.'):]
 
     if extension == '.bz2':
-        #with bz2.BZ2File(fp) as fr, open(fileout, 'wb') as fw:
-        #    shutil.copyfileobj(fr,fw)
         cmd = ['bzip2', '-d', fp]
         subprocess.run(cmd, check=True, text=True)
-#     elif extension == '.xz':
-#         pass
+    elif extension == '.xz':
+        cmd = ['xz', '--decompress', fp]
+        subprocess.run(cmd, check=True, text=True)
     else:
         raise Exception('Cannot decompress files of type {}'.format(extension))
 
@@ -180,7 +179,7 @@ def main(praw_reddit, links_df=None, df_slice=None):
         mongoinfo = mongo_import(month, fp)
 
         comment_count = filter_comments(mongoinfo)
-    #     get_posts(reddit, month)
+        get_posts(reddit, month)
 
         links_df.loc[idx, 'downloaded'] = True
         links_df.loc[idx, 'size_in_bytes'] = filesize
@@ -200,4 +199,4 @@ if __name__ == "__main__":
 
     links_df = get_download_links()
 
-    main(reddit, links_df=links_df, df_slice=slice(116, 144))
+    main(reddit, links_df=links_df, df_slice=slice(144, 152))
