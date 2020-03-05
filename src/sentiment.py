@@ -6,6 +6,7 @@ from textblob import TextBlob
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer as SIA
 import pprint
+import re
 
 from datetime import datetime
 import os
@@ -67,6 +68,7 @@ def monthly_stats(month, subreddit=None, analyzer='vader'):
                                 })
     
     total_n_words = 0
+    total_polarity = 0
     total_abs_polarity = 0
     total_abs_weighted_polarity = 0
     total_score = 0
@@ -77,32 +79,31 @@ def monthly_stats(month, subreddit=None, analyzer='vader'):
         except:
             pass
         if analyzer == 'vader':
+            total_polarity += doc['score']*doc['vader_sentiment']
             total_abs_weighted_polarity += doc['score']*abs(doc['vader_sentiment'])
             total_abs_polarity += abs(doc['vader_sentiment'])
         else:
+            total_polarity += doc['score']*doc['textblob_sentiment']
             total_abs_weighted_polarity += doc['score']*abs(doc['textblob_sentiment'])
             total_abs_polarity += abs(doc['textblob_sentiment'])
         total_score += doc['score']
         comment_count += 1
 
     try:
+        avg_weighted_polarity = total_polarity/total_score
         avg_abs_weighted_polarity = total_abs_weighted_polarity/total_score
-    except ZeroDivisionError:
-        avg_abs_weighted_polarity = None
-
-    try:
         avg_abs_polarity = total_abs_polarity/comment_count
-    except ZeroDivisionError:
-        avg_abs_polarity = None
-
-    try:
         avg_wordcount = total_n_words/comment_count
     except ZeroDivisionError:
+        avg_weighted_polarity = None
+        avg_abs_weighted_polarity = None
+        avg_abs_polarity = None
         avg_wordcount = None
 
     client.close()
 
-    return {'avg_abs_wght_pol': avg_abs_weighted_polarity, 
+    return {'avg_wght_pol': avg_weighted_polarity,
+            'avg_abs_wght_pol': avg_abs_weighted_polarity, 
             'avg_abs_pol': avg_abs_polarity,
             'comment_count': comment_count, 
             'avg_wordcount': avg_wordcount}
@@ -151,32 +152,93 @@ def monthly_stats_top_posts(yearmonths, subreddit, post_limit=100, analyzer='vad
             except:
                 pass
             if analyzer == 'vader':
+                total_polarity += doc['score']*doc['vader_sentiment']
                 total_abs_weighted_polarity += doc['score']*abs(doc['vader_sentiment'])
                 total_abs_polarity += abs(doc['vader_sentiment'])
             else:
+                total_polarity += doc['score']*doc['textblob_sentiment']
                 total_abs_weighted_polarity += doc['score']*abs(doc['textblob_sentiment'])
                 total_abs_polarity += abs(doc['textblob_sentiment'])
             total_score += doc['score']
             comment_count += 1
-    
+
     client.close()
 
     try:
+        avg_weighted_polarity = total_polarity/total_score
         avg_abs_weighted_polarity = total_abs_weighted_polarity/total_score
-    except ZeroDivisionError:
-        avg_abs_weighted_polarity = None
-
-    try:
         avg_abs_polarity = total_abs_polarity/comment_count
-    except ZeroDivisionError:
-        avg_abs_polarity = None
-
-    try:
         avg_wordcount = total_n_words/comment_count
     except ZeroDivisionError:
+        avg_weighted_polarity = None
+        avg_abs_weighted_polarity = None
+        avg_abs_polarity = None
         avg_wordcount = None
-    
-    return {'avg_abs_wght_pol': avg_abs_weighted_polarity, 
+
+    return {'avg_wght_pol': avg_weighted_polarity,
+            'avg_abs_wght_pol': avg_abs_weighted_polarity,
             'avg_abs_pol': avg_abs_polarity,
-            'comment_count': comment_count, 
+            'comment_count': comment_count,
+            'avg_wordcount': avg_wordcount}
+
+
+def monthly_stats_by_topic(yearmonths, subreddit, phrase, analyzer='vader'):
+    """Gets specific stats for all comments among the top (post_limit) posts."""
+
+    client = MongoClient()
+    db = client['myreddit']
+    posts_all = db['posts_all']
+
+    cursor = posts_all.find({'yearmonth': yearmonths[0], 'sub': subreddit, 'title': re.compile(phrase, re.IGNORECASE)})
+    link_ids = [post['link_id'] if post['link_id'].startswith('t3_') else 't3_' + post['link_id'] for post in cursor]
+
+    total_n_words = 0
+    total_polarity = 0
+    total_abs_weighted_polarity = 0
+    total_abs_polarity = 0
+    total_score = 0
+    total_wordcount = 0
+    comment_count = 0
+
+    for ym in yearmonths:
+        coll_name = 'comments-' + ym
+        coll = db[coll_name]
+        cursor = coll.find({'$and': 
+                                [{'$expr': {'$ne': ['$body', '[deleted]']}},
+                                 {'$expr': {'$gt': ['$score', 0]}},
+                                 {'link_id': {'$in': link_ids}}]
+                            })
+        for doc in cursor:
+            try:
+                total_n_words += len(doc['body'].split())
+            except:
+                pass
+            if analyzer == 'vader':
+                total_polarity += doc['score']*doc['vader_sentiment']
+                total_abs_weighted_polarity += doc['score']*abs(doc['vader_sentiment'])
+                total_abs_polarity += abs(doc['vader_sentiment'])
+            else:
+                total_polarity += doc['score']*doc['textblob_sentiment']
+                total_abs_weighted_polarity += doc['score']*abs(doc['textblob_sentiment'])
+                total_abs_polarity += abs(doc['textblob_sentiment'])
+            total_score += doc['score']
+            comment_count += 1
+
+    client.close()
+
+    try:
+        avg_weighted_polarity = total_polarity/total_score
+        avg_abs_weighted_polarity = total_abs_weighted_polarity/total_score
+        avg_abs_polarity = total_abs_polarity/comment_count
+        avg_wordcount = total_n_words/comment_count
+    except ZeroDivisionError:
+        avg_weighted_polarity = None
+        avg_abs_weighted_polarity = None
+        avg_abs_polarity = None
+        avg_wordcount = None
+
+    return {'avg_wght_pol': avg_weighted_polarity,
+            'avg_abs_wght_pol': avg_abs_weighted_polarity,
+            'avg_abs_pol': avg_abs_polarity,
+            'comment_count': comment_count,
             'avg_wordcount': avg_wordcount}
