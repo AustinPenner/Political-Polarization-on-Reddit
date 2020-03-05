@@ -5,6 +5,7 @@ import praw
 
 import pprint
 import bs4 as bs
+import urllib
 import urllib.request
 import bz2,shutil
 
@@ -15,7 +16,7 @@ import subprocess
 
 
 def get_download_links():
-    """Uses BeautifulSoup to parse "https://files.pushshift.io/reddit/comments/", which has all reddit comments by month. 
+    """Uses urllib and BeautifulSoup to parse "https://files.pushshift.io/reddit/comments/", which has all reddit comments by month. 
     Gets download links to the data and returns in a pandas dataframe"""
 
     url_source = 'https://files.pushshift.io/reddit/comments/'
@@ -39,18 +40,38 @@ def get_download_links():
 
     return links_df
 
-def download_file(download_url, s3_bucket = None, remove_file=True):
+def get_num_monthly_comments():
+    """Uses urllib to parse "https://files.pushshift.io/reddit/comments/monthlyCount.txt", which has the number of
+    comments posted monthly across reddit. Returns in a pandas dataframe"""
+
+    comments_url = 'https://files.pushshift.io/reddit/comments/monthlyCount.txt'
+    comment_sizes = []
+
+    data = urllib.request.urlopen(comments_url)
+    for line in data:
+        row = [i.decode('utf-8') for i in line.rstrip().split()]
+        comment_sizes.append(row)
+
+    comments_df = pd.DataFrame(comment_sizes, columns=['yearmonth', 'count'])
+    comments_df['count'] = comments_df['count'].apply(lambda x: int(x))
+    comments_df['yearmonth'] = comments_df['yearmonth'].apply(lambda x: x[3:x.find('.')])
+    comments_df['datetime'] = pd.to_datetime(comments_df['yearmonth'])
+
+    return comments_df
+
+def download_file(download_url, remove_file=True):
     """For a given file, this downloads the data and calls extract_file"""
 
+    base_url = download_url[:download_url.rfind('/') + 1]
     filename = download_url[download_url.rfind('/') + 1:]
     filepath = './data/comment_files/' + filename
     print('Downloading file...')
 
-    if s3_bucket is None:
-        urllib.request.urlretrieve(download_url, filepath)
-    else:
+    if download_url.startswith('s3:'):
         s3 = boto3.client('s3')
-        s3.download_file(s3_bucket, filename, filepath)
+        s3.download_file(base_url, filename, filepath)
+    else:
+        urllib.request.urlretrieve(download_url, filepath)
 
     return extract_file(filepath, remove_file)
 
@@ -158,7 +179,7 @@ def get_posts(praw_reddit, month):
 
     client.close()
 
-def main(praw_reddit, links_df=None, df_slice=None):
+def main(praw_reddit, links_df=None, df_slice=None, s3_bucket=None):
     if links_df is None:
         links_df = get_download_links()
 
@@ -170,12 +191,15 @@ def main(praw_reddit, links_df=None, df_slice=None):
     for idx, row in links_df_iter.iterrows():
         start = time.time()
         month = row['month']
+
         url = row['link']
+        filename = url[url.rfind('/') + 1:]
+        if s3_bucket is not None:
+            url = s3_bucket + filename
+
         print('Reddit comments month: {}'.format(month))
 
-        filename = url[url.rfind('/') + 1:]
-        s3_url = 's3://aust-galv-aust-finalcap/' + filename
-        fp, filesize = download_file(s3_url, s3_bucket='aust-galv-aust-finalcap')
+        fp, filesize = download_file(url)
         mongoinfo = mongo_import(month, fp)
 
         comment_count = filter_comments(mongoinfo)
@@ -199,4 +223,4 @@ if __name__ == "__main__":
 
     links_df = get_download_links()
 
-    main(reddit, links_df=links_df, df_slice=slice(144, 152))
+    main(reddit, links_df=links_df, df_slice=slice(144, 152), s3_bucket='aust-galv-aust-finalcap')
